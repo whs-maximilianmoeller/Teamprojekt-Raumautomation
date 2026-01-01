@@ -1,0 +1,69 @@
+:root {
+    --bg-color: #2b2e33;
+    --text-color: #c7c7c7;
+    --card-bg: #2b2e33;
+    --shadow-light: #35393f;
+    --shadow-dark: #212428;
+    --accent-cyan: #0dcaf0;
+    --accent-orange: #fd7e14;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Neumorphism Utilities */
+.neu-navbar {
+    background-color: var(--bg-color) !important;
+    box-shadow: 5px 5px 10px var(--shadow-dark),
+        -5px -5px 10px var(--shadow-light);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.neu-card {
+    background-color: var(--card-bg);
+    border: none;
+    border-radius: 15px;
+    box-shadow: 8px 8px 16px var(--shadow-dark),
+        -8px -8px 16px var(--shadow-light);
+    color: var(--text-color);
+}
+
+.neu-progress {
+    height: 10px;
+    background-color: var(--bg-color);
+    border-radius: 5px;
+    box-shadow: inset 4px 4px 8px var(--shadow-dark),
+        inset -4px -4px 8px var(--shadow-light);
+}
+
+.neu-range {
+    /* Custom styling for range input could be complex, keeping default for now but could enhance */
+}
+
+.card-title {
+    color: var(--accent-cyan);
+    font-weight: 600;
+}
+
+.chart-container {
+    position: relative;
+    height: 200px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+/* Override Chart.js Text Color globally handled in JS, but here strictly for fallback */
+
+.neu-inset {
+    background-color: var(--bg-color);
+    border-radius: 10px;
+    box-shadow: inset 5px 5px 10px var(--shadow-dark),
+        inset -5px -5px 10px var(--shadow-light);
+    padding: 15px;
+    min-width: 120px;
+    text-align: center;
+}
