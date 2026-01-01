@@ -4,7 +4,7 @@ from serial_manager import SerialManager
 from flask_cors import CORS
 import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='../pi_frontend', static_url_path='')
 CORS(app) # CORS für alle Domains aktivieren
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///climate_data.db'
@@ -23,7 +23,7 @@ serial_mgr.start()
 
 @app.route('/')
 def index():
-    return "<h1>Raumautomation Backend</h1><p>Läuft...</p>"
+    return app.send_static_file('index.html')
 
 @app.route('/api/live', methods=['GET'])
 def get_live_data():
@@ -71,4 +71,4 @@ if __name__ == '__main__':
     # Server starten
     # Hinweis: debug=True verträgt sich manchmal schlecht mit Serial-Threads, 
     # aber ist okay für die Entwicklung.
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5001, debug=False)

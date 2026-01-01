@@ -3,6 +3,7 @@ import time
 import json
 import serial
 import serial.tools.list_ports
+import random
 from simple_pid import PID
 from models import db, ClimateReading
 from flask import Flask
@@ -111,9 +112,50 @@ class SerialManager:
                         print("Connected to Motor")
                     except: motor_ser = None
                 
-                if not sensor_ser or not motor_ser:
-                    print("Waiting for devices...")
-                    time.sleep(5)
+                if not sensor_ser and not motor_ser:
+                    # SIMULATION MODE
+                    print("No devices found. Saving simulation data...")
+                    # Simuliere langsame Änderung
+                    # Startwerte
+                    if self.current_temp is None: 
+                        self.current_temp = 22.0
+                        self.current_hum = 50.0
+
+                    # Random Walk Simulation
+                    self.current_temp += random.uniform(-0.1, 0.1)
+                    self.current_hum += random.uniform(-0.5, 0.5)
+                    
+                    # PID Berechnung (Simuliert)
+                    speed_temp = 0
+                    speed_hum = 0
+                    
+                    # PID Sollwerte aktualisieren
+                    self.pid_temp.setpoint = self.target_temp
+                    self.pid_hum.setpoint = self.target_hum
+                    
+                    speed_temp = int(self.pid_temp(self.current_temp))
+                    speed_hum = int(self.pid_hum(self.current_hum))
+                    
+                    final_speed = 0
+                    if self.control_mode == "TEMP": final_speed = speed_temp
+                    elif self.control_mode == "HUM": final_speed = speed_hum
+                    elif self.control_mode == "AUTO": final_speed = max(speed_temp, speed_hum)
+                    
+                    self.current_fan_speed = max(0, min(255, final_speed))
+                    
+                    # Logging
+                    if time.time() - last_log_time > 30:
+                        last_log_time = time.time()
+                        with self.app.app_context():
+                            reading = ClimateReading(
+                                temperature=self.current_temp,
+                                humidity=self.current_hum,
+                                fan_speed=self.current_fan_speed
+                            )
+                            db.session.add(reading)
+                            db.session.commit()
+                            
+                    time.sleep(1) # Simulation läuft langsamer
                     continue
 
             # 2. Hauptschleife

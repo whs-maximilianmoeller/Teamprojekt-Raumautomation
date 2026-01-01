@@ -1,5 +1,5 @@
 // Konfiguration - Zeigt auf deine Raspberry Pi IP (falls nicht lokal)
-const API_BASE = 'http://localhost:5000';
+const API_BASE = 'http://localhost:5001';
 
 // --- Gauge Diagramme (Tacho) ---
 const gaugeOptions = {
