@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>.WHS RAUMAUTOMATION</title>
+    <!-- Google Fonts: Orbitron for Sci-Fi look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Roboto+Mono:wght@300;500&display=swap"
+        rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-color: #0b0c15;
+            --panel-bg: rgba(20, 25, 40, 0.8);
+            --neon-blue: #00f3ff;
+            --neon-pink: #bc13fe;
+            --neon-green: #0aff0a;
+            --text-main: #e0e0e0;
+            --text-dim: #6c7a89;
+            --border-glow: 0 0 10px rgba(0, 243, 255, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image:
+                linear-gradient(rgba(0, 20, 40, 0.7) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 20, 40, 0.7) 1px, transparent 1px);
+            background-size: 50px 50px;
+            color: var(--text-main);
+            font-family: 'Orbitron', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* HEADER */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            border-bottom: 2px solid var(--neon-blue);
+            box-shadow: 0 0 20px rgba(0, 243, 255, 0.2);
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(10px);
+        }
+
+        h1 {
+            font-weight: 900;
+            letter-spacing: 2px;
+            font-size: 24px;
+            text-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        h1 span {
+            color: var(--neon-pink);
+        }
+
+        #connect-btn {
+            background: transparent;
+            color: var(--neon-blue);
+            border: 2px solid var(--neon-blue);
+            padding: 10px 20px;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s;
+            box-shadow: 0 0 10px rgba(0, 243, 255, 0.1);
+        }
+
+        #connect-btn:hover {
+            background: var(--neon-blue);
+            color: #000;
+            box-shadow: 0 0 20px var(--neon-blue);
+        }
+
+        #connect-btn.connected {
+            border-color: var(--neon-green);
+            color: var(--neon-green);
+            box-shadow: 0 0 10px rgba(10, 255, 10, 0.2);
+        }
+
+        /* MAIN LAYOUT */
+        main {
+            flex: 1;
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr 350px;
+            grid-template-rows: 300px 1fr;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .panel {
+            background: var(--panel-bg);
+            border: 1px solid rgba(0, 243, 255, 0.2);
+            border-radius: 5px;
+            padding: 20px;
+            position: relative;
+            backdrop-filter: blur(5px);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 10px;
+            height: 10px;
+            border-top: 2px solid var(--neon-blue);
+            border-left: 2px solid var(--neon-blue);
+        }
+
+        .panel::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            width: 10px;
+            height: 10px;
+            border-bottom: 2px solid var(--neon-blue);
+            border-right: 2px solid var(--neon-blue);
+        }
+
+        .panel-header {
+            font-size: 14px;
+            color: var(--neon-blue);
+            text-transform: uppercase;
+            margin-bottom: 15px;
+            border-bottom: 1px solid rgba(0, 243, 255, 0.1);
+            padding-bottom: 5px;
+        }
+
+        /* GAUGES */
+        .gauge-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .gauge-value {
+            position: absolute;
+            text-align: center;
+        }
+
+        .gauge-value h2 {
+            font-size: 48px;
+            font-weight: 700;
+        }
+
+        .gauge-value span {
+            font-family: 'Roboto Mono', monospace;
+            color: var(--text-dim);
+            font-size: 16px;
+        }
+
+        svg.gauge {
+            width: 220px;
+            height: 220px;
+            transform: rotate(-90deg);
+        }
+
+        circle.bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.05);
+            stroke-width: 15;
+        }
+
+        circle.meter {
+            fill: none;
+            stroke-width: 15;
+            stroke-linecap: round;
+            stroke-dasharray: 630;
+            /* 2 * PI * 100 approx */
+            stroke-dashoffset: 630;
+            transition: stroke-dashoffset 1s ease-out;
+        }
+
+        /* CONTROLS */
+        .control-group {
+            margin-bottom: 25px;
+        }
+
+        .label {
+            display: block;
+            margin-bottom: 10px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        /* Toggle Switch */
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 20px;
+            border-radius: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #333;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+        }
+
+        input:checked+.slider {
+            background-color: var(--neon-pink);
+            box-shadow: 0 0 10px var(--neon-pink);
+        }
+
+        input:checked+.slider:before {
+            transform: translateX(30px);
+        }
+
+        /* MANUAL SUB MODES */
+        .manual-options {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #666;
+            padding: 8px 5px;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .mode-btn.active {
+            border-color: var(--neon-pink);
+            color: var(--neon-pink);
+            background: rgba(188, 19, 254, 0.1);
+            box-shadow: 0 0 10px rgba(188, 19, 254, 0.2);
+        }
+
+        /* Range Slider */
+        input[type=range] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+
+        input[type=range]:focus {
+            outline: none;
+        }
+
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #333;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+
+        input[type=range]::-webkit-slider-thumb {
+            height: 20px;
+            width: 20px;
+            border-radius: 50%;
+            background: var(--neon-blue);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 10px var(--neon-blue);
+        }
+
+        .value-display {
+            font-family: 'Roboto Mono', monospace;
+            text-align: right;
+            color: var(--neon-blue);
+            margin-top: 5px;
+        }
+
+        /* CHART */
+        .chart-container {
+            grid-column: 1 / 3;
+            grid-row: 2 / 3;
+            position: relative;
+        }
+
+        /* LOG / STATUS */
+        .log-panel {
+            grid-column: 3 / 4;
+            grid-row: 2 / 3;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 11px;
+            overflow-y: auto;
+            color: var(--text-dim);
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            padding-bottom: 2px;
+        }
+
+        .log-entry.tx {
+            color: var(--neon-green);
+        }
+
+        .log-entry.rx {
+            color: var(--neon-blue);
+        }
+
+        .log-entry.err {
+            color: var(--neon-pink);
+        }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0b0c15;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 2px;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 1000px) {
+            main {
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto auto auto;
+            }
+
+            .controls-panel {
+                grid-column: 1 / 3;
+            }
+
+            .chart-container {
+                grid-column: 1 / 3;
+                height: 300px;
+            }
+
+            .log-panel {
+                grid-column: 1 / 3;
+                height: 150px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <h1>.WHS <span>RAUMAUTOMATION</span></h1>
+        <button id="connect-btn" onclick="toggleConnect()">UNKNOWN DEVICE</button>
+    </header>
+
+    <main>
+        <!-- TEMP GAUGE -->
+        <div class="panel">
+            <div class="panel-header">Temperatur</div>
+            <div class="gauge-container">
+                <svg class="gauge" viewBox="0 0 220 220">
+                    <circle class="bg" cx="110" cy="110" r="100" />
+                    <circle class="meter" id="temp-meter" cx="110" cy="110" r="100" stroke="#ff3d00" />
+                </svg>
+                <div class="gauge-value">
+                    <h2 id="temp-val">--</h2>
+                    <span>°C</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- HUMIDITY GAUGE -->
+        <div class="panel">
+            <div class="panel-header">Luftfeuchtigkeit</div>
+            <div class="gauge-container">
+                <svg class="gauge" viewBox="0 0 220 220">
+                    <circle class="bg" cx="110" cy="110" r="100" />
+                    <circle class="meter" id="hum-meter" cx="110" cy="110" r="100" stroke="#00f3ff" />
+                </svg>
+                <div class="gauge-value">
+                    <h2 id="hum-val">--</h2>
+                    <span>%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTROLS -->
+        <div class="panel controls-panel">
+            <div class="panel-header">Manuelle Steuerung</div>
+
+            <div class="control-group">
+                <span class="label">BETRIEBSMODUS</span>
+                <div class="toggle-container">
+                    <span id="label-auto" style="color: var(--neon-blue)">AUTO</span>
+                    <label class="switch">
+                        <input type="checkbox" id="mode-toggle">
+                        <span class="slider"></span>
+                    </label>
+                    <span id="label-manual" style="color: #666">MANUAL</span>
+                </div>
+            </div>
+
+            <div class="control-group" id="manual-controls"
+                style="opacity: 0.5; pointer-events: none; transition: opacity 0.3s">
+                <span class="label">REGELUNG NACH</span>
+                <div class="manual-options">
+                    <button class="mode-btn active" onclick="setSubMode('PWM')">LEISTUNG</button>
+                    <button class="mode-btn" onclick="setSubMode('TEMP')">ZIEL-TEMP</button>
+                    <button class="mode-btn" onclick="setSubMode('HUM')">ZIEL-HUM</button>
+                </div>
+
+                <span class="label" id="target-label" style="margin-top: 15px;">OUTPUT POWER</span>
+                <input type="range" id="target-slider" min="0" max="255" value="0">
+                <div class="value-display"><span id="target-val">0</span> <span id="target-unit">/ 255</span></div>
+            </div>
+
+            <div class="control-group">
+                <span class="label">SYSTEM STATUS</span>
+                <div id="status-text" style="font-size: 14px; color: var(--neon-green)">BEREIT</div>
+            </div>
+        </div>
+
+        <!-- CHART -->
+        <div class="panel chart-container">
+            <div class="panel-header">Verlauf (60s)</div>
+            <canvas id="tempChart"></canvas>
+        </div>
+
+        <!-- LOG -->
+        <div class="panel log-panel" id="log-console">
+            <div class="log-entry">> System initialisiert...</div>
+            <div class="log-entry">> Warte auf Verbindung...</div>
+        </div>
+    </main>
+
+    <script>
+        // --- CONFIG & STATE ---
+        let port;
+        let reader;
+        let writer;
+        let isConnected = false;
+        let keepReading = false;
+        let currentSubMode = 'PWM'; // PWM, TEMP, HUM
+
+        // --- CHART SETUP ---
+        const ctx = document.getElementById('tempChart').getContext('2d');
+        const tempChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(60).fill(''),
+                datasets: [{
+                    label: 'Temperatur (°C)',
+                    data: Array(60).fill(null),
+                    borderColor: '#00f3ff',
+                    backgroundColor: 'rgba(0, 243, 255, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    pointRadius: 0,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 0 },
+                scales: {
+                    x: { display: false },
+                    y: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#6c7a89' },
+                        suggestedMin: 20,
+                        suggestedMax: 35
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        // --- UI ELEMENTS ---
+        const connectBtn = document.getElementById('connect-btn');
+        const logConsole = document.getElementById('log-console');
+        const tempVal = document.getElementById('temp-val');
+        const humVal = document.getElementById('hum-val');
+        const tempMeter = document.getElementById('temp-meter');
+        const humMeter = document.getElementById('hum-meter');
+
+        const modeToggle = document.getElementById('mode-toggle');
+        const manualControls = document.getElementById('manual-controls');
+
+        const targetSlider = document.getElementById('target-slider');
+        const targetValDisplay = document.getElementById('target-val');
+        const targetUnitDisplay = document.getElementById('target-unit');
+        const targetLabel = document.getElementById('target-label');
+
+        const statusText = document.getElementById('status-text');
+        const labelAuto = document.getElementById('label-auto');
+        const labelManual = document.getElementById('label-manual');
+
+        const modeBtns = document.querySelectorAll('.mode-btn');
+
+        // Meter Circle
+        const CIRCUMFERENCE = 628;
+        tempMeter.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
+        tempMeter.style.strokeDashoffset = CIRCUMFERENCE;
+        humMeter.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
+        humMeter.style.strokeDashoffset = CIRCUMFERENCE;
+
+        // --- EVENT LISTENERS ---
+        modeToggle.addEventListener('change', () => {
+            const isManual = modeToggle.checked;
+            updateControlUI(isManual);
+            sendCommand();
+        });
+
+        targetSlider.addEventListener('input', () => {
+            targetValDisplay.textContent = targetSlider.value;
+            sendCommand();
+        });
+
+        function setSubMode(mode) {
+            currentSubMode = mode;
+
+            // Visual Active State
+            modeBtns.forEach(btn => {
+                if (btn.textContent.includes(mode) || (mode === 'LEISTUNG' && btn.textContent === 'LEISTUNG')) {
+                    // Simple check based on text since we call with code
+                }
+                btn.classList.remove('active');
+            });
+            // Re-find active button based on onclick attribute or text
+            // Simplification: just reset all and find by index or logic
+            if (mode === 'PWM') modeBtns[0].classList.add('active');
+            if (mode === 'TEMP') modeBtns[1].classList.add('active');
+            if (mode === 'HUM') modeBtns[2].classList.add('active');
+
+            // Update Slider Params
+            if (mode === 'PWM') {
+                targetLabel.textContent = "LÜFTER LEISTUNG";
+                targetSlider.min = 0; targetSlider.max = 255;
+                targetSlider.value = 0;
+                targetUnitDisplay.textContent = "/ 255";
+            } else if (mode === 'TEMP') {
+                targetLabel.textContent = "ZIEL TEMPERATUR";
+                targetSlider.min = 15; targetSlider.max = 35; step = 0.5;
+                targetSlider.value = 25;
+                targetUnitDisplay.textContent = "°C";
+            } else if (mode === 'HUM') {
+                targetLabel.textContent = "ZIEL FEUCHTIGKEIT";
+                targetSlider.min = 30; targetSlider.max = 80;
+                targetSlider.value = 60;
+                targetUnitDisplay.textContent = "%";
+            }
+
+            targetValDisplay.textContent = targetSlider.value;
+            sendCommand();
+        }
+
+        function updateControlUI(isManual) {
+            if (isManual) {
+                manualControls.style.opacity = '1';
+                manualControls.style.pointerEvents = 'all';
+                labelManual.style.color = 'var(--neon-pink)';
+                labelAuto.style.color = '#666';
+            } else {
+                manualControls.style.opacity = '0.5';
+                manualControls.style.pointerEvents = 'none';
+                labelManual.style.color = '#666';
+                labelAuto.style.color = 'var(--neon-blue)';
+            }
+        }
+
+        // --- SERIAL CONNECTION ---
+        async function toggleConnect() {
+            if (isConnected) {
+                await disconnect();
+            } else {
+                await connect();
+            }
+        }
+
+        async function connect() {
+            try {
+                port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 9600 });
+
+                isConnected = true;
+                keepReading = true;
+                connectBtn.textContent = "VERBUNDEN";
+                connectBtn.classList.add('connected');
+                log("Verbindung hergestellt.", "sys");
+
+                const textEncoder = new TextEncoderStream();
+                const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+                writer = textEncoder.writable.getWriter();
+
+                readLoop();
+
+            } catch (err) {
+                console.error(err);
+                log("Fehler: " + err.message, "err");
+            }
+        }
+
+        async function disconnect() {
+            keepReading = false;
+            if (reader) await reader.cancel();
+            if (writer) writer.close();
+            if (port) await port.close();
+
+            isConnected = false;
+            connectBtn.textContent = "NICHT VERBUNDEN";
+            connectBtn.classList.remove('connected');
+            log("Verbindung getrennt.", "sys");
+        }
+
+        async function readLoop() {
+            const textDecoder = new TextDecoderStream();
+            const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+            reader = textDecoder.readable.getReader();
+            let buffer = "";
+
+            try {
+                while (keepReading) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    if (value) {
+                        buffer += value;
+                        const lines = buffer.split('\n');
+                        buffer = lines.pop();
+                        for (const line of lines) {
+                            if (line.trim() !== '') handleData(line.trim());
+                        }
+                    }
+                }
+            } catch (error) {
+                log("Read Error: " + error, "err");
+            } finally {
+                reader.releaseLock();
+            }
+        }
+
+        // --- DATA HANDLING ---
+        function handleData(jsonString) {
+            try {
+                const data = JSON.parse(jsonString);
+
+                if (data.temp !== undefined) {
+                    tempVal.innerText = data.temp.toFixed(1);
+                    setGauge(tempMeter, data.temp, 0, 50);
+                    updateChart(data.temp);
+                }
+                if (data.hum !== undefined) {
+                    humVal.innerText = data.hum.toFixed(0);
+                    setGauge(humMeter, data.hum, 0, 100);
+                }
+                if (data.mode) {
+                    statusText.innerText = "MODUS: " + data.mode.toUpperCase();
+                }
+                if (data.sub && data.mode === "Manual") {
+                    statusText.innerText += " [" + data.sub + "]";
+                }
+
+            } catch (e) {
+                console.log("Parse error", e);
+            }
+        }
+
+        // --- COMMAND SENDING ---
+        async function sendCommand() {
+            if (!isConnected && !window.location.search.includes('demo=true')) return;
+
+            const mode = modeToggle.checked ? "manual" : "auto";
+            let val = parseFloat(targetSlider.value);
+
+            // Construct JSON
+            // {"mode":"manual", "sub":"pwm", "val": 100}
+            const cmd = {
+                mode: mode
+            };
+
+            if (mode === 'manual') {
+                cmd.sub = currentSubMode.toLowerCase();
+                cmd.val = val;
+            }
+
+            const jsonCmd = JSON.stringify(cmd) + "\n";
+
+            if (isConnected) {
+                writer.write(jsonCmd);
+            } else {
+                console.log("Mock Send:", jsonCmd);
+            }
+            // log("TX: " + jsonCmd.trim(), "tx");
+        }
+
+        // --- HELPERS ---
+        function setGauge(element, value, min, max) {
+            let v = Math.max(min, Math.min(max, value));
+            let percent = (v - min) / (max - min);
+            const offset = CIRCUMFERENCE - (percent * CIRCUMFERENCE);
+            element.style.strokeDashoffset = offset;
+
+            if (element.id === 'temp-meter') {
+                if (v > 30) element.style.stroke = '#ff0055';
+                else if (v < 20) element.style.stroke = '#00f3ff';
+                else element.style.stroke = '#0aff0a';
+            }
+        }
+
+        function updateChart(newTemp) {
+            const data = tempChart.data.datasets[0].data;
+            data.shift();
+            data.push(newTemp);
+            tempChart.update();
+        }
+
+        function log(msg, type) {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            div.textContent = `> ${msg}`;
+            logConsole.appendChild(div);
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        // --- DEMO MODE ---
+        if (window.location.search.includes('demo=true')) {
+            connectBtn.innerText = "DEMO SIMULATION";
+            connectBtn.classList.add('connected');
+            statusText.innerText = "MODUS: SIMULATION";
+
+            let time = 0;
+            setInterval(() => {
+                time += 0.1;
+                const demoTemp = 27.5 + Math.sin(time) * 7.5;
+                const demoHum = 50 + Math.cos(time * 0.5) * 20 + (Math.random() * 5);
+
+                const demoData = {
+                    temp: demoTemp,
+                    hum: demoHum,
+                    pwm: 120, // Dummy
+                    mode: modeToggle.checked ? "Manual" : "Auto",
+                    sub: currentSubMode
+                };
+
+                handleData(JSON.stringify(demoData));
+            }, 1000);
+        }
+
+    </script>
+</body>
+
+</html>
