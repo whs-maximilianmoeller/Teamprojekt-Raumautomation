@@ -66,7 +66,7 @@ void loop() {
     previousMillis = currentMillis;
 
     // Sensor lesen
-    if (am2315.readTemperatureAndHumidity(temp, hum)) {
+    if (am2315.readTemperatureAndHumidity(&temp, &hum)) {
       controlFan();
     }
 
@@ -83,14 +83,25 @@ void loop() {
  */
 void controlFan() {
   if (currentMode == "Auto") {
-    // Legacy Auto Mode: 25°C -> 0%, 30°C -> 100%
-    if (temp < 25.0)
+    // Auto Mode: Temp ONLY (Humidity ignored)
+    // < 20: OFF
+    // 20-22: Light (approx 15% -> ~40 PWM)
+    // > 22: Ramp from 40 to 255 (Max at 27)
+
+    if (temp < 20.0) {
       currentPwm = 0;
-    else if (temp >= 30.0)
-      currentPwm = 255;
-    else {
-      float ratio = (temp - 25.0) / (30.0 - 25.0);
-      currentPwm = (int)(ratio * 255);
+    } else if (temp <= 22.0) {
+      // "Leicht" laufen
+      currentPwm = 40;
+    } else {
+      // > 22.0: Immer stärker werden
+      if (temp >= 27.0) {
+        currentPwm = 255;
+      } else {
+        // Linear ramp from 40 to 255 between 22.0 and 27.0
+        float ratio = (temp - 22.0) / (27.0 - 22.0);
+        currentPwm = 40 + (int)(ratio * (255 - 40));
+      }
     }
   } else if (currentMode == "Manual") {
     if (manualSubMode == "PWM") {

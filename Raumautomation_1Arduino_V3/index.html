@@ -40,10 +40,9 @@
             background-size: 50px 50px;
             color: var(--text-main);
             font-family: 'Orbitron', sans-serif;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            min-height: 100vh;
+            display: block;
+            overflow-y: auto;
         }
 
         /* HEADER */
@@ -98,11 +97,11 @@
         /* MAIN LAYOUT */
         main {
             flex: 1;
-            padding: 30px;
+            padding: 10px;
             display: grid;
-            grid-template-columns: 1fr 1fr 350px;
-            grid-template-rows: 300px 1fr;
-            gap: 20px;
+            grid-template-columns: 1fr 1fr 1fr 340px;
+            grid-template-rows: auto 1fr;
+            gap: 10px;
             max-width: 1600px;
             margin: 0 auto;
             width: 100%;
@@ -176,8 +175,8 @@
         }
 
         svg.gauge {
-            width: 220px;
-            height: 220px;
+            width: 180px;
+            height: 180px;
             transform: rotate(-90deg);
         }
 
@@ -340,14 +339,19 @@
 
         /* CHART */
         .chart-container {
-            grid-column: 1 / 3;
+            grid-column: 1 / 4;
+            /* Spans 3 columns (under Gauges) */
             grid-row: 2 / 3;
             position: relative;
+            height: 350px !important;
+            min-height: 350px;
+            max-height: 350px;
         }
 
         /* LOG / STATUS */
         .log-panel {
-            grid-column: 3 / 4;
+            grid-column: 4 / 5;
+            /* Spans sidebar column */
             grid-row: 2 / 3;
             font-family: 'Roboto Mono', monospace;
             font-size: 11px;
@@ -388,24 +392,33 @@
         }
 
         /* RESPONSIVE */
-        @media (max-width: 1000px) {
+        @media (max-width: 1100px) {
             main {
-                grid-template-columns: 1fr 1fr;
-                grid-template-rows: auto auto auto;
+                grid-template-columns: 1fr 1fr 1fr;
+                grid-template-rows: auto auto auto auto;
+            }
+
+            .gauge-container svg {
+                width: 140px;
+                height: 140px;
+            }
+
+            /* Reorder: Gauges Row 1, Chart Row 2, Controls Row 3 */
+            .chart-container {
+                grid-column: 1 / 4;
+                grid-row: 2;
+                height: 250px;
             }
 
             .controls-panel {
-                grid-column: 1 / 3;
-            }
-
-            .chart-container {
-                grid-column: 1 / 3;
-                height: 300px;
+                grid-column: 1 / 4;
+                grid-row: 3;
             }
 
             .log-panel {
-                grid-column: 1 / 3;
-                height: 150px;
+                grid-column: 1 / 4;
+                grid-row: 4;
+                height: 100px;
             }
         }
     </style>
@@ -444,6 +457,21 @@
                 </svg>
                 <div class="gauge-value">
                     <h2 id="hum-val">--</h2>
+                    <span>%</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- FAN GAUGE (NEW) -->
+        <div class="panel">
+            <div class="panel-header">Lüfterdrehzahl</div>
+            <div class="gauge-container">
+                <svg class="gauge" viewBox="0 0 220 220">
+                    <circle class="bg" cx="110" cy="110" r="100" />
+                    <circle class="meter" id="fan-meter" cx="110" cy="110" r="100" stroke="#bc13fe" />
+                </svg>
+                <div class="gauge-value">
+                    <h2 id="fan-val">0</h2>
                     <span>%</span>
                 </div>
             </div>
@@ -500,11 +528,7 @@
 
     <script>
         // --- CONFIG & STATE ---
-        let port;
-        let reader;
-        let writer;
         let isConnected = false;
-        let keepReading = false;
         let currentSubMode = 'PWM'; // PWM, TEMP, HUM
 
         // --- CHART SETUP ---
@@ -512,33 +536,86 @@
         const tempChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: Array(60).fill(''),
-                datasets: [{
-                    label: 'Temperatur (°C)',
-                    data: Array(60).fill(null),
-                    borderColor: '#00f3ff',
-                    backgroundColor: 'rgba(0, 243, 255, 0.1)',
-                    borderWidth: 2,
-                    tension: 0.4,
-                    pointRadius: 0,
-                    fill: true
-                }]
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Temperatur (°C)',
+                        data: [],
+                        borderColor: '#ff3d00', // RED/ORANGE
+                        backgroundColor: 'rgba(255, 61, 0, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        fill: false,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Feuchtigkeit (%)',
+                        data: [],
+                        borderColor: '#00f3ff', // CYAN 
+                        backgroundColor: 'rgba(0, 243, 255, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        fill: false,
+                        yAxisID: 'y1'
+                    },
+                    {
+                        label: 'Lüfter (%)', // PWM scaled to %
+                        data: [],
+                        borderColor: '#bc13fe', // PURPLE
+                        backgroundColor: 'rgba(188, 19, 254, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        fill: true,
+                        yAxisID: 'y1' // Share right axis with Humidity
+                    }
+                ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: { duration: 0 },
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
                 scales: {
-                    x: { display: false },
+                    x: {
+                        display: true,
+                        grid: { display: false },
+                        ticks: {
+                            color: '#6c7a89',
+                            maxTicksLimit: 6 // Show approx 1 per minute
+                        }
+                    },
                     y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: { display: true, text: 'Temperatur (°C)', color: '#ff3d00' },
                         grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#6c7a89' },
-                        suggestedMin: 20,
+                        ticks: { color: '#ff3d00' },
+                        suggestedMin: 15,
                         suggestedMax: 35
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        title: { display: true, text: 'RH% / FAN%', color: '#00f3ff' },
+                        grid: { drawOnChartArea: false },
+                        ticks: { color: '#00f3ff' },
+                        min: 0,
+                        max: 100
                     }
                 },
                 plugins: {
-                    legend: { display: false }
+                    legend: {
+                        display: true,
+                        labels: { color: '#ccc' }
+                    }
                 }
             }
         });
@@ -550,6 +627,10 @@
         const humVal = document.getElementById('hum-val');
         const tempMeter = document.getElementById('temp-meter');
         const humMeter = document.getElementById('hum-meter');
+
+        // NEW Fan Element
+        const fanVal = document.getElementById('fan-val');
+        const fanMeter = document.getElementById('fan-meter');
 
         const modeToggle = document.getElementById('mode-toggle');
         const manualControls = document.getElementById('manual-controls');
@@ -567,10 +648,10 @@
 
         // Meter Circle
         const CIRCUMFERENCE = 628;
-        tempMeter.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
-        tempMeter.style.strokeDashoffset = CIRCUMFERENCE;
-        humMeter.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
-        humMeter.style.strokeDashoffset = CIRCUMFERENCE;
+        [tempMeter, humMeter, fanMeter].forEach(m => {
+            m.style.strokeDasharray = `${CIRCUMFERENCE} ${CIRCUMFERENCE}`;
+            m.style.strokeDashoffset = CIRCUMFERENCE;
+        });
 
         // --- EVENT LISTENERS ---
         modeToggle.addEventListener('change', () => {
@@ -581,21 +662,21 @@
 
         targetSlider.addEventListener('input', () => {
             targetValDisplay.textContent = targetSlider.value;
+        });
+
+        targetSlider.addEventListener('change', () => {
             sendCommand();
         });
+
 
         function setSubMode(mode) {
             currentSubMode = mode;
 
             // Visual Active State
             modeBtns.forEach(btn => {
-                if (btn.textContent.includes(mode) || (mode === 'LEISTUNG' && btn.textContent === 'LEISTUNG')) {
-                    // Simple check based on text since we call with code
-                }
                 btn.classList.remove('active');
             });
-            // Re-find active button based on onclick attribute or text
-            // Simplification: just reset all and find by index or logic
+
             if (mode === 'PWM') modeBtns[0].classList.add('active');
             if (mode === 'TEMP') modeBtns[1].classList.add('active');
             if (mode === 'HUM') modeBtns[2].classList.add('active');
@@ -603,9 +684,9 @@
             // Update Slider Params
             if (mode === 'PWM') {
                 targetLabel.textContent = "LÜFTER LEISTUNG";
-                targetSlider.min = 0; targetSlider.max = 255;
+                targetSlider.min = 0; targetSlider.max = 100; // Percent
                 targetSlider.value = 0;
-                targetUnitDisplay.textContent = "/ 255";
+                targetUnitDisplay.textContent = "%";
             } else if (mode === 'TEMP') {
                 targetLabel.textContent = "ZIEL TEMPERATUR";
                 targetSlider.min = 15; targetSlider.max = 35; step = 0.5;
@@ -636,128 +717,86 @@
             }
         }
 
-        // --- SERIAL CONNECTION ---
-        async function toggleConnect() {
-            if (isConnected) {
-                await disconnect();
-            } else {
-                await connect();
-            }
-        }
+        // --- API COMMUNICATION ---
 
-        async function connect() {
+        async function fetchLive() {
             try {
-                port = await navigator.serial.requestPort();
-                await port.open({ baudRate: 9600 });
+                const res = await fetch('/api/live');
+                const data = await res.json();
 
-                isConnected = true;
-                keepReading = true;
-                connectBtn.textContent = "VERBUNDEN";
-                connectBtn.classList.add('connected');
-                log("Verbindung hergestellt.", "sys");
-
-                const textEncoder = new TextEncoderStream();
-                const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
-                writer = textEncoder.writable.getWriter();
-
-                readLoop();
-
-            } catch (err) {
-                console.error(err);
-                log("Fehler: " + err.message, "err");
-            }
-        }
-
-        async function disconnect() {
-            keepReading = false;
-            if (reader) await reader.cancel();
-            if (writer) writer.close();
-            if (port) await port.close();
-
-            isConnected = false;
-            connectBtn.textContent = "NICHT VERBUNDEN";
-            connectBtn.classList.remove('connected');
-            log("Verbindung getrennt.", "sys");
-        }
-
-        async function readLoop() {
-            const textDecoder = new TextDecoderStream();
-            const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
-            reader = textDecoder.readable.getReader();
-            let buffer = "";
-
-            try {
-                while (keepReading) {
-                    const { value, done } = await reader.read();
-                    if (done) break;
-                    if (value) {
-                        buffer += value;
-                        const lines = buffer.split('\n');
-                        buffer = lines.pop();
-                        for (const line of lines) {
-                            if (line.trim() !== '') handleData(line.trim());
-                        }
+                // Connection Status
+                if (data.connected !== isConnected) {
+                    isConnected = data.connected;
+                    if (isConnected) {
+                        connectBtn.textContent = "VERBUNDEN";
+                        connectBtn.classList.add('connected');
+                        log("System verbunden.", "sys");
+                    } else {
+                        connectBtn.textContent = "KEINE VERBINDUNG";
+                        connectBtn.classList.remove('connected');
                     }
                 }
-            } catch (error) {
-                log("Read Error: " + error, "err");
-            } finally {
-                reader.releaseLock();
-            }
-        }
-
-        // --- DATA HANDLING ---
-        function handleData(jsonString) {
-            try {
-                const data = JSON.parse(jsonString);
 
                 if (data.temp !== undefined) {
                     tempVal.innerText = data.temp.toFixed(1);
                     setGauge(tempMeter, data.temp, 0, 50);
-                    updateChart(data.temp);
                 }
                 if (data.hum !== undefined) {
                     humVal.innerText = data.hum.toFixed(0);
                     setGauge(humMeter, data.hum, 0, 100);
                 }
-                if (data.mode) {
-                    statusText.innerText = "MODUS: " + data.mode.toUpperCase();
+                if (data.pwm !== undefined) {
+                    // Convert 0-255 to 0-100%
+                    let pct = Math.round((data.pwm / 255.0) * 100);
+                    fanVal.innerText = pct;
+                    setGauge(fanMeter, pct, 0, 100);
                 }
-                if (data.sub && data.mode === "Manual") {
-                    statusText.innerText += " [" + data.sub + "]";
+                if (data.mode) {
+                    let txt = "MODUS: " + data.mode.toUpperCase();
+                    if (data.sub && data.mode === "Manual") {
+                        txt += " [" + data.sub + "]";
+                    }
+                    statusText.innerText = txt;
                 }
 
-            } catch (e) {
-                console.log("Parse error", e);
+            } catch (err) {
+                // console.error("Poll Error", err);
+                // Silent fail on poll
             }
         }
 
-        // --- COMMAND SENDING ---
-        async function sendCommand() {
-            if (!isConnected && !window.location.search.includes('demo=true')) return;
+        // fetchHistory kept as is...
 
+        async function sendCommand() {
             const mode = modeToggle.checked ? "manual" : "auto";
             let val = parseFloat(targetSlider.value);
 
             // Construct JSON
-            // {"mode":"manual", "sub":"pwm", "val": 100}
             const cmd = {
                 mode: mode
             };
 
             if (mode === 'manual') {
                 cmd.sub = currentSubMode.toLowerCase();
-                cmd.val = val;
+
+                // If PWM mode, convert % back to 0-255
+                if (cmd.sub === 'pwm') {
+                    cmd.val = Math.round((val / 100.0) * 255);
+                } else {
+                    cmd.val = val;
+                }
             }
 
-            const jsonCmd = JSON.stringify(cmd) + "\n";
-
-            if (isConnected) {
-                writer.write(jsonCmd);
-            } else {
-                console.log("Mock Send:", jsonCmd);
+            try {
+                await fetch('/api/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cmd)
+                });
+                log("CMD: " + mode + (cmd.val ? " " + cmd.val : ""), "tx");
+            } catch (e) {
+                log("Fehler beim Senden", "err");
             }
-            // log("TX: " + jsonCmd.trim(), "tx");
         }
 
         // --- HELPERS ---
@@ -774,11 +813,98 @@
             }
         }
 
-        function updateChart(newTemp) {
-            const data = tempChart.data.datasets[0].data;
-            data.shift();
-            data.push(newTemp);
-            tempChart.update();
+        function log(msg, type) {
+            const div = document.createElement('div');
+            div.className = `log-entry ${type}`;
+            div.textContent = `> ${msg}`;
+            logConsole.appendChild(div);
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        function toggleConnect() {
+            // No-op or maybe re-trigger check
+            log("Verbindung wird automatisch vom Server verwaltet.", "sys");
+        }
+
+        async function fetchHistory() {
+            try {
+                const res = await fetch('/api/history');
+                const history = await res.json();
+
+                // History is strictly ordered by DB (oldest first due to server.py reverse)
+                // We expect up to 300 points
+
+                const labels = history.map(row => {
+                    // Robust timestamp parsing for SQL (space) or ISO (T)
+                    if (row.timestamp) {
+                        try {
+                            if (row.timestamp.includes('T')) {
+                                return row.timestamp.split('T')[1].split('.')[0];
+                            } else {
+                                return row.timestamp.split(' ')[1];
+                            }
+                        } catch (e) { return ""; }
+                    }
+                    return '';
+                });
+
+                const temps = history.map(row => row.temperature);
+                const hums = history.map(row => row.humidity);
+                const pwms = history.map(row => (row.pwm / 255.0) * 100.0); // Scale 0-255 to 0-100%
+
+                tempChart.data.labels = labels;
+                tempChart.data.datasets[0].data = temps;
+                tempChart.data.datasets[1].data = hums;
+                tempChart.data.datasets[2].data = pwms;
+
+                // Enable spanGaps for all
+                tempChart.data.datasets.forEach(ds => ds.spanGaps = true);
+
+                tempChart.update();
+
+            } catch (err) {
+                console.error("History Error", err);
+            }
+        }
+
+        async function sendCommand() {
+            const mode = modeToggle.checked ? "manual" : "auto";
+            let val = parseFloat(targetSlider.value);
+
+            // Construct JSON
+            const cmd = {
+                mode: mode
+            };
+
+            if (mode === 'manual') {
+                cmd.sub = currentSubMode.toLowerCase();
+                cmd.val = val;
+            }
+
+            try {
+                await fetch('/api/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(cmd)
+                });
+                log("CMD gesendet: " + mode, "tx");
+            } catch (e) {
+                log("Fehler beim Senden", "err");
+            }
+        }
+
+        // --- HELPERS ---
+        function setGauge(element, value, min, max) {
+            let v = Math.max(min, Math.min(max, value));
+            let percent = (v - min) / (max - min);
+            const offset = CIRCUMFERENCE - (percent * CIRCUMFERENCE);
+            element.style.strokeDashoffset = offset;
+
+            if (element.id === 'temp-meter') {
+                if (v < 20) element.style.stroke = '#00f3ff';      // Blue
+                else if (v <= 22) element.style.stroke = '#0aff0a'; // Green
+                else element.style.stroke = '#ff3d00';              // Red
+            }
         }
 
         function log(msg, type) {
@@ -789,29 +915,15 @@
             logConsole.scrollTop = logConsole.scrollHeight;
         }
 
-        // --- DEMO MODE ---
-        if (window.location.search.includes('demo=true')) {
-            connectBtn.innerText = "DEMO SIMULATION";
-            connectBtn.classList.add('connected');
-            statusText.innerText = "MODUS: SIMULATION";
-
-            let time = 0;
-            setInterval(() => {
-                time += 0.1;
-                const demoTemp = 27.5 + Math.sin(time) * 7.5;
-                const demoHum = 50 + Math.cos(time * 0.5) * 20 + (Math.random() * 5);
-
-                const demoData = {
-                    temp: demoTemp,
-                    hum: demoHum,
-                    pwm: 120, // Dummy
-                    mode: modeToggle.checked ? "Manual" : "Auto",
-                    sub: currentSubMode
-                };
-
-                handleData(JSON.stringify(demoData));
-            }, 1000);
+        function toggleConnect() {
+            // No-op or maybe re-trigger check
+            log("Verbindung wird automatisch vom Server verwaltet.", "sys");
         }
+
+        // --- INIT POLLING ---
+        setInterval(fetchLive, 1000); // 1s live data
+        setInterval(fetchHistory, 5000); // 5s chart update
+        fetchHistory(); // initial
 
     </script>
 </body>
